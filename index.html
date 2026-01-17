@@ -8,92 +8,25 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: 'sans-serif'; color: white; touch-action: none; }
-        /* 가로 모드 강제 및 비율 유지 */
-        #game-container { 
-            position: relative; 
-            width: 100vw; 
-            height: 100vh; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            overflow: hidden;
-            background: #050505;
-        }
-        canvas { 
-            height: 100%; 
-            aspect-ratio: 16/9; 
-            background: #111; 
-            display: block; 
-            box-shadow: 0 0 50px rgba(0,0,0,1);
-        }
-
+        #game-container { position: relative; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; background: #050505; }
+        canvas { height: 100%; aspect-ratio: 16/9; background: #111; display: block; }
         .ui-overlay { position: absolute; inset: 0; pointer-events: none; user-select: none; }
         .interactive { pointer-events: auto; }
-
-        /* Joystick Style */
-        #joystick-base {
-            position: absolute; bottom: 10%; left: 8%;
-            width: 150px; height: 150px;
-            background: rgba(255,255,255,0.1);
-            border: 2px solid rgba(255,255,255,0.2);
-            border-radius: 50%;
-            backdrop-blur: 5px;
-        }
-        #joystick-stick {
-            position: absolute; top: 50%; left: 50%;
-            width: 70px; height: 70px;
-            background: rgba(255,255,255,0.3);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-
-        /* Action Buttons cluster */
+        #joystick-base { position: absolute; bottom: 10%; left: 8%; width: 150px; height: 150px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 50%; backdrop-blur: 5px; }
+        #joystick-stick { position: absolute; top: 50%; left: 50%; width: 70px; height: 70px; background: rgba(255,255,255,0.3); border-radius: 50%; transform: translate(-50%, -50%); }
         .action-cluster { position: absolute; bottom: 8%; right: 5%; width: 280px; height: 280px; }
-        .btn-main-atk {
-            position: absolute; bottom: 0; right: 0;
-            width: 110px; height: 110px;
-            background: rgba(220, 38, 38, 0.7);
-            border: 4px solid white; border-radius: 50%;
-            font-size: 24px; font-weight: 900; color: white;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 20px rgba(220, 38, 38, 0.5);
-        }
-        .btn-skill {
-            position: absolute; width: 75px; height: 75px;
-            background: rgba(30, 58, 138, 0.7);
-            border: 2px solid rgba(255,255,255,0.5); border-radius: 50%;
-            font-size: 11px; font-weight: bold;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
-        #skill-0 { bottom: 130px; right: 20px; }
-        #skill-1 { bottom: 100px; right: 115px; }
-        #skill-2 { bottom: 10px; right: 140px; }
-
-        /* Backpack UI */
-        #inventory-window {
-            position: absolute; inset: 10%;
-            background: rgba(15, 23, 42, 0.95);
-            border: 3px solid #fbbf24; border-radius: 24px;
-            display: none; flex-direction: column; padding: 20px;
-            z-index: 100; backdrop-blur: 10px;
-        }
+        .btn-main-atk { position: absolute; bottom: 0; right: 0; width: 110px; height: 110px; background: rgba(220, 38, 38, 0.7); border: 4px solid white; border-radius: 50%; font-size: 24px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(220, 38, 38, 0.5); }
+        .btn-skill { position: absolute; width: 75px; height: 75px; background: rgba(30, 58, 138, 0.7); border: 2px solid rgba(255,255,255,0.5); border-radius: 50%; font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+        #skill-btn-0 { bottom: 130px; right: 20px; }
+        #skill-btn-1 { bottom: 100px; right: 115px; }
+        #skill-btn-2 { bottom: 10px; right: 140px; }
+        #inventory-window { position: absolute; inset: 10%; background: rgba(15, 23, 42, 0.95); border: 3px solid #fbbf24; border-radius: 24px; display: none; flex-direction: column; padding: 20px; z-index: 100; backdrop-blur: 10px; }
         .item-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; overflow-y: auto; }
-        .item-slot { 
-            aspect-ratio: 1/1; background: rgba(255,255,255,0.05); 
-            border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
-            display: flex; align-items: center; justify-content: center; font-size: 10px;
-            padding: 5px; text-align: center;
-        }
-
-        #login-screen {
-            position: fixed; inset: 0; background: #0f172a; z-index: 1000;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
+        .item-slot { aspect-ratio: 1/1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 10px; padding: 5px; text-align: center; }
+        #login-screen { position: fixed; inset: 0; background: #0f172a; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
     </style>
 </head>
 <body>
-
 <div id="login-screen">
     <h1 class="text-6xl font-black mb-6 text-yellow-500 italic tracking-tighter">GOBLIN MINE</h1>
     <div class="flex gap-2 mb-4">
@@ -106,290 +39,60 @@
         <button onclick="setJob('Arcanist')" class="p-3 bg-purple-900 rounded-xl text-xs">🪄 아카니스트</button>
     </div>
 </div>
-
 <div id="game-container">
     <canvas id="gameCanvas"></canvas>
-
     <div class="ui-overlay" id="hud" style="display: none;">
-        <!-- Player Info -->
         <div class="absolute top-4 left-6 flex items-center gap-4">
             <div class="p-3 bg-black/60 rounded-2xl border border-white/10 backdrop-blur-md">
                 <div id="hud-name" class="font-black text-yellow-400 text-sm mb-1">Player</div>
-                <div class="w-48 h-3 bg-gray-900 rounded-full overflow-hidden border border-black">
-                    <div id="hp-bar" class="h-full bg-red-600 w-full transition-all duration-300"></div>
-                </div>
-                <div class="w-48 h-2 bg-gray-900 rounded-full overflow-hidden border border-black mt-1">
-                    <div id="mp-bar" class="h-full bg-blue-600 w-full transition-all duration-300"></div>
-                </div>
+                <div class="w-48 h-3 bg-gray-900 rounded-full overflow-hidden border border-black"><div id="hp-bar" class="h-full bg-red-600 w-full transition-all duration-300"></div></div>
+                <div class="w-48 h-2 bg-gray-900 rounded-full overflow-hidden border border-black mt-1"><div id="mp-bar" class="h-full bg-blue-600 w-full transition-all duration-300"></div></div>
             </div>
             <button onclick="toggleInventory()" class="interactive p-4 bg-yellow-600 rounded-2xl font-bold shadow-lg">🎒 가방</button>
         </div>
-
-        <!-- Joystick -->
-        <div id="joystick-base" class="interactive">
-            <div id="joystick-stick"></div>
-        </div>
-
-        <!-- Action Cluster -->
+        <div id="joystick-base" class="interactive"><div id="joystick-stick"></div></div>
         <div class="action-cluster interactive">
             <div class="btn-main-atk" id="btn-atk">ATK</div>
-            <div class="btn-skill" id="btn-skill-0" data-idx="0"><span>스킬1</span></div>
-            <div class="btn-skill" id="btn-skill-1" data-idx="1"><span>스킬2</span></div>
-            <div class="btn-skill" id="btn-skill-2" data-idx="2"><span>스킬3</span></div>
+            <div class="btn-skill" id="skill-btn-0" data-idx="0"><span>스킬1</span></div>
+            <div class="btn-skill" id="skill-btn-1" data-idx="1"><span>스킬2</span></div>
+            <div class="btn-skill" id="skill-btn-2" data-idx="2"><span>스킬3</span></div>
         </div>
-
-        <!-- Inventory Window -->
         <div id="inventory-window" class="interactive">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-3xl font-black text-yellow-500 italic">INVENTORY</h2>
-                <div class="flex gap-4 items-center">
-                    <span id="gold-display" class="text-yellow-400 font-bold">💰 0 G</span>
-                    <button onclick="toggleInventory()" class="text-2xl">✕</button>
-                </div>
+                <div class="flex gap-4 items-center"><span id="gold-display" class="text-yellow-400 font-bold">💰 0 G</span><button onclick="toggleInventory()" class="text-2xl">✕</button></div>
             </div>
-            <div id="inventory-grid" class="item-grid flex-1">
-                <!-- Items injected here -->
-            </div>
+            <div id="inventory-grid" class="item-grid flex-1"></div>
         </div>
     </div>
 </div>
-
 <script>
     const socket = io();
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const INTERNAL_W = 1280, INTERNAL_H = 720;
     canvas.width = INTERNAL_W; canvas.height = INTERNAL_H;
-
     let myData = null, players = {}, monsters = [], projectiles = [], groundItems = [], worldPortals = [], currentMap = 'village';
-    let selectedJob = 'Guardian';
+    let selectedJob = 'Guardian', lastAngle = 0;
     const joystick = { active: false, ox: 0, oy: 0, dx: 0, dy: 0, max: 75 };
-    let lastAngle = 0;
-
     function setJob(j) { selectedJob = j; }
-
-    function startGame() {
-        const nick = document.getElementById('nickname').value;
-        socket.emit('join', { nickname: nick, job: selectedJob });
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('hud').style.display = 'block';
-    }
-
-    // --- Core Sync ---
+    function startGame() { socket.emit('join', { nickname: document.getElementById('nickname').value, job: selectedJob }); document.getElementById('login-screen').style.display = 'none'; document.getElementById('hud').style.display = 'block'; }
     socket.on('stateUpdate', (data) => {
-        players = data.players;
-        monsters = data.monsters;
-        projectiles = data.projectiles;
-        groundItems = data.groundItems;
-        worldPortals = data.worldPortals;
-        
-        myData = players[socket.id];
-        if (myData) {
-            updateHUD(myData);
-        }
+        players = data.players; monsters = data.monsters; projectiles = data.projectiles; groundItems = data.groundItems; worldPortals = data.worldPortals;
+        myData = players[socket.id]; if (myData) updateHUD(myData);
     });
-
     socket.on('mapChange', (d) => currentMap = d.map);
-    socket.on('sysMsg', (m) => console.log("%c[SYS] " + m, "color: #fbbf24; font-weight: bold;"));
-
-    function updateHUD(me) {
-        document.getElementById('hud-name').innerText = `${me.nickname} (Lv.${me.level})`;
-        document.getElementById('hp-bar').style.width = (me.hp / me.maxHp * 100) + '%';
-        document.getElementById('mp-bar').style.width = (me.mp / (50 + (me.addedStats?.int || 0) * 10) * 100) + '%';
-        document.getElementById('gold-display').innerText = `💰 ${me.gold.toLocaleString()} G`;
-    }
-
-    // --- Mobile Controls ---
+    function updateHUD(me) { document.getElementById('hud-name').innerText = `${me.nickname} (Lv.${me.level})`; document.getElementById('hp-bar').style.width = (me.hp / me.maxHp * 100) + '%'; document.getElementById('gold-display').innerText = `💰 ${me.gold.toLocaleString()} G`; }
     const jBase = document.getElementById('joystick-base'), jStick = document.getElementById('joystick-stick');
-    jBase.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        const r = jBase.getBoundingClientRect();
-        joystick.active = true;
-        joystick.ox = r.left + r.width/2;
-        joystick.oy = r.top + r.height/2;
-    });
-
-    window.addEventListener('touchmove', (e) => {
-        if (!joystick.active) return;
-        const t = [...e.touches].find(touch => touch.target === jBase || jBase.contains(touch.target));
-        if (!t) return;
-        let mx = t.clientX - joystick.ox, my = t.clientY - joystick.oy;
-        const d = Math.sqrt(mx*mx + my*my);
-        if (d > joystick.max) { mx = (mx/d)*joystick.max; my = (my/d)*joystick.max; }
-        joystick.dx = mx/joystick.max; joystick.dy = my/joystick.max;
-        lastAngle = Math.atan2(my, mx);
-        jStick.style.transform = `translate(calc(-50% + ${mx}px), calc(-50% + ${my}px))`;
-    });
-
-    window.addEventListener('touchend', () => {
-        joystick.active = false; joystick.dx = 0; joystick.dy = 0;
-        jStick.style.transform = `translate(-50%, -50%)`;
-    });
-
-    // Action Buttons
-    document.getElementById('btn-atk').onclick = () => {
-        // 자동 조준 로직
-        let angle = lastAngle;
-        if (monsters.length > 0) {
-            let nearest = null, minDist = 600;
-            monsters.forEach(m => {
-                const d = Math.hypot(m.x - myData.x, m.y - myData.y);
-                if (d < minDist) { minDist = d; nearest = m; }
-            });
-            if (nearest) angle = Math.atan2(nearest.y - myData.y, nearest.x - myData.x);
-        }
-        socket.emit('action', { type: 'attack', angle });
-    };
-
-    // 스킬 드래그 조준 지원
-    let aimingSkillIdx = null;
-    document.querySelectorAll('.btn-skill').forEach(btn => {
-        btn.addEventListener('touchstart', (e) => {
-            aimingSkillIdx = btn.dataset.idx;
-        });
-        btn.addEventListener('touchend', (e) => {
-            if (aimingSkillIdx !== null) {
-                socket.emit('action', { type: 'skill', skillIdx: parseInt(aimingSkillIdx), angle: lastAngle });
-                aimingSkillIdx = null;
-            }
-        });
-    });
-
-    // --- Inventory System ---
-    function toggleInventory() {
-        const inv = document.getElementById('inventory-window');
-        const isOpen = inv.style.display === 'flex';
-        inv.style.display = isOpen ? 'none' : 'flex';
-        if (!isOpen) renderInventory();
-    }
-
-    function renderInventory() {
-        const grid = document.getElementById('inventory-grid');
-        grid.innerHTML = '';
-        if (!myData) return;
-
-        myData.inventory.forEach((item, i) => {
-            const slot = document.createElement('div');
-            slot.className = `item-slot ${item.isIdentified ? 'border-yellow-500' : 'border-gray-500 opacity-60'}`;
-            slot.innerHTML = `<div>${item.isIdentified ? item.name : item.tier}</div>`;
-            slot.onclick = () => {
-                if (!item.isIdentified) {
-                    if (confirm('감별하시겠습니까? (100G)')) socket.emit('identifyItem', item.id);
-                } else {
-                    if (item.type === 'consumable') socket.emit('useItem', item.id);
-                    else if (confirm('장착하시겠습니까?')) socket.emit('equipItem', item.id);
-                }
-                setTimeout(renderInventory, 100);
-            };
-            grid.appendChild(slot);
-        });
-        
-        // 빈 슬롯 채우기
-        for(let i=myData.inventory.length; i<18; i++) {
-            const empty = document.createElement('div');
-            empty.className = 'item-slot';
-            grid.appendChild(empty);
-        }
-    }
-
-    // --- Game Rendering Loop ---
-    function loop() {
-        if (myData && !myData.downed && !myData.isDead && (joystick.dx || joystick.dy)) {
-            socket.emit('move', { 
-                x: myData.x + joystick.dx * (myData.moveSpeed || 8), 
-                y: myData.y + joystick.dy * (myData.moveSpeed || 8), 
-                dir: joystick.dx >= 0 ? 1 : -1 
-            });
-        }
-        render();
-        requestAnimationFrame(loop);
-    }
-
-    function render() {
-        if (!myData) return;
-        
-        // 관전 시점 처리
-        let camTarget = myData;
-        if (myData.isDead && myData.spectateTargetId && players[myData.spectateTargetId]) {
-            camTarget = players[myData.spectateTargetId];
-        }
-
-        const ox = INTERNAL_W/2 - camTarget.x, oy = INTERNAL_H/2 - camTarget.y;
-
-        // 배경
-        ctx.fillStyle = currentMap === 'village' ? '#1e293b' : '#0a0a0a';
-        ctx.fillRect(0, 0, INTERNAL_W, INTERNAL_H);
-
-        // 그리드 (광산 느낌)
-        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-        ctx.beginPath();
-        for(let x=-MAP_SIZE; x<=MAP_SIZE; x+=100) { ctx.moveTo(x+ox, -MAP_SIZE+oy); ctx.lineTo(x+ox, MAP_SIZE+oy); }
-        for(let y=-MAP_SIZE; y<=MAP_SIZE; y+=100) { ctx.moveTo(-MAP_SIZE+ox, y+oy); ctx.lineTo(MAP_SIZE+ox, y+oy); }
-        ctx.stroke();
-
-        // 몬스터
-        monsters.forEach(m => {
-            const dist = Math.hypot(m.x - myData.x, m.y - myData.y);
-            if (currentMap === 'village' || dist < myData.sightRange + 100) {
-                ctx.fillStyle = m.color;
-                ctx.fillRect(m.x + ox - m.size/2, m.y + oy - m.size, m.size, m.size);
-                // HP Bar
-                ctx.fillStyle = '#f00'; ctx.fillRect(m.x+ox-m.size/2, m.y+oy-m.size-10, (m.hp/m.maxHp)*m.size, 5);
-            }
-        });
-
-        // 아이템 루팅
-        groundItems.forEach(item => {
-            ctx.fillStyle = '#fbbf24';
-            ctx.beginPath(); ctx.arc(item.x+ox, item.y+oy, 10, 0, Math.PI*2); ctx.fill();
-            // 자동 루팅 혹은 상호작용
-            if (Math.hypot(myData.x - item.x, myData.y - item.y) < 80) {
-                socket.emit('pickupItem', item.id);
-            }
-        });
-
-        // 포탈
-        worldPortals.forEach(p => {
-            ctx.fillStyle = 'rgba(168, 85, 247, 0.4)';
-            ctx.beginPath(); ctx.arc(p.x+ox, p.y+oy, 60, 0, Math.PI*2); ctx.fill();
-            ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 4; ctx.stroke();
-            if (Math.hypot(myData.x - p.x, myData.y - p.y) < 70) {
-                ctx.fillStyle = 'white'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
-                ctx.fillText("탈출 시전 중...", p.x+ox, p.y+oy-80);
-                socket.emit('usePortal', p.id);
-            }
-        });
-
-        // 투사체
-        projectiles.forEach(p => {
-            ctx.fillStyle = p.fromPlayer ? '#fbbf24' : '#ef4444';
-            ctx.beginPath(); ctx.arc(p.x+ox, p.y+oy, 6, 0, Math.PI*2); ctx.fill();
-        });
-
-        // 플레이어
-        Object.values(players).forEach(p => {
-            if (p.inDungeon !== myData.inDungeon) return;
-            ctx.fillStyle = p.downed ? '#444' : (p.id === socket.id ? '#4ade80' : '#f87171');
-            ctx.fillRect(p.x + ox - 25, p.y + oy - 60, 50, 65);
-            ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.font = 'bold 14px sans-serif';
-            ctx.fillText(p.nickname, p.x + ox, p.y + oy - 80);
-            if (p.downed) {
-                ctx.fillStyle = '#fb923c'; ctx.fillRect(p.x+ox-25, p.y+oy-95, p.bleedGauge/2, 4);
-            }
-        });
-
-        // 안개 (Fog of War)
-        if (currentMap === 'dungeon') {
-            ctx.save();
-            const grad = ctx.createRadialGradient(INTERNAL_W/2, INTERNAL_H/2, myData.sightRange*0.5, INTERNAL_W/2, INTERNAL_H/2, myData.sightRange);
-            grad.addColorStop(0, 'rgba(0,0,0,0)');
-            grad.addColorStop(1, 'rgba(0,0,0,0.92)');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, INTERNAL_W, INTERNAL_H);
-            ctx.restore();
-        }
-    }
-
+    jBase.addEventListener('touchstart', (e) => { e.preventDefault(); const r = jBase.getBoundingClientRect(); joystick.active = true; joystick.ox = r.left + r.width/2; joystick.oy = r.top + r.height/2; });
+    window.addEventListener('touchmove', (e) => { if (!joystick.active) return; const t = [...e.touches].find(touch => touch.target === jBase || jBase.contains(touch.target)); if (!t) return; let mx = t.clientX - joystick.ox, my = t.clientY - joystick.oy; const d = Math.sqrt(mx*mx + my*my); if (d > joystick.max) { mx = (mx/d)*joystick.max; my = (my/d)*joystick.max; } joystick.dx = mx/joystick.max; joystick.dy = my/joystick.max; lastAngle = Math.atan2(my, mx); jStick.style.transform = `translate(calc(-50% + ${mx}px), calc(-50% + ${my}px))`; });
+    window.addEventListener('touchend', () => { joystick.active = false; joystick.dx = 0; joystick.dy = 0; jStick.style.transform = `translate(-50%, -50%)`; });
+    document.getElementById('btn-atk').onclick = () => { let a = lastAngle; if (monsters.length > 0) { let n = null, dM = 600; monsters.forEach(m => { let d = Math.hypot(m.x - myData.x, m.y - myData.y); if (d < dM) { dM = d; n = m; } }); if (n) a = Math.atan2(n.y - myData.y, n.x - myData.x); } socket.emit('action', { type: 'attack', angle: a }); };
+    document.querySelectorAll('.btn-skill').forEach(btn => { btn.addEventListener('touchend', (e) => { socket.emit('action', { type: 'skill', skillIdx: parseInt(btn.dataset.idx), angle: lastAngle }); }); });
+    function toggleInventory() { const inv = document.getElementById('inventory-window'); inv.style.display = inv.style.display === 'flex' ? 'none' : 'flex'; if (inv.style.display === 'flex') renderInventory(); }
+    function renderInventory() { const grid = document.getElementById('inventory-grid'); grid.innerHTML = ''; myData.inventory.forEach((item) => { const slot = document.createElement('div'); slot.className = `item-slot border-yellow-500`; slot.innerHTML = `<div>${item.isIdentified ? item.name : item.tier}</div>`; slot.onclick = () => { if (!item.isIdentified) { if (confirm('감별(100G)?')) socket.emit('identifyItem', item.id); } else { if (item.type === 'consumable') socket.emit('useItem', item.id); else socket.emit('equipItem', item.id); } setTimeout(renderInventory, 100); }; grid.appendChild(slot); }); }
+    function loop() { if (myData && !myData.downed && !myData.isDead && (joystick.dx || joystick.dy)) { socket.emit('move', { x: myData.x + joystick.dx * 8, y: myData.y + joystick.dy * 8, dir: joystick.dx >= 0 ? 1 : -1 }); } render(); requestAnimationFrame(loop); }
+    function render() { if (!myData) return; let cam = myData; if (myData.isDead && myData.spectateTargetId && players[myData.spectateTargetId]) cam = players[myData.spectateTargetId]; const ox = INTERNAL_W/2 - cam.x, oy = INTERNAL_H/2 - cam.y; ctx.fillStyle = currentMap === 'village' ? '#1e293b' : '#0a0a0a'; ctx.fillRect(0, 0, INTERNAL_W, INTERNAL_H); monsters.forEach(m => { if (Math.hypot(m.x - myData.x, m.y - myData.y) < myData.sightRange + 100) { ctx.fillStyle = m.color; ctx.fillRect(m.x + ox - m.size/2, m.y + oy - m.size, m.size, m.size); ctx.fillStyle = '#f00'; ctx.fillRect(m.x+ox-m.size/2, m.y+oy-m.size-10, (m.hp/m.maxHp)*m.size, 5); } }); groundItems.forEach(i => { ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(i.x+ox, i.y+oy, 10, 0, Math.PI*2); ctx.fill(); if (Math.hypot(myData.x - i.x, myData.y - i.y) < 80) socket.emit('pickupItem', i.id); }); worldPortals.forEach(p => { ctx.fillStyle = 'rgba(168, 85, 247, 0.4)'; ctx.beginPath(); ctx.arc(p.x+ox, p.y+oy, 60, 0, Math.PI*2); ctx.fill(); if (Math.hypot(myData.x - p.x, myData.y - p.y) < 70) socket.emit('usePortal', p.id); }); projectiles.forEach(p => { ctx.fillStyle = p.fromPlayer ? '#fbbf24' : '#ef4444'; ctx.beginPath(); ctx.arc(p.x+ox, p.y+oy, 6, 0, Math.PI*2); ctx.fill(); }); Object.values(players).forEach(p => { if (p.inDungeon === myData.inDungeon) { ctx.fillStyle = p.downed ? '#444' : (p.id === socket.id ? '#4ade80' : '#f87171'); ctx.fillRect(p.x + ox - 25, p.y + oy - 60, 50, 65); ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.fillText(p.nickname, p.x + ox, p.y + oy - 80); if (p.downed) { ctx.fillStyle = '#fb923c'; ctx.fillRect(p.x+ox-25, p.y+oy-95, p.bleedGauge/2, 4); } } }); if (currentMap === 'dungeon') { ctx.save(); const grad = ctx.createRadialGradient(INTERNAL_W/2, INTERNAL_H/2, myData.sightRange*0.5, INTERNAL_W/2, INTERNAL_H/2, myData.sightRange); grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,0.92)'); ctx.fillStyle = grad; ctx.fillRect(0, 0, INTERNAL_W, INTERNAL_H); ctx.restore(); } }
     requestAnimationFrame(loop);
 </script>
 </body>

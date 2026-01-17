@@ -12,29 +12,30 @@ const io = new Server(server);
 
 app.use(express.static(__dirname));
 
-// --- Firebase 설정 및 초기화 (배포 환경 대응) ---
-// Render 등 외부 배포 시에는 환경 변수(Environment Variables)에 해당 값을 넣어야 합니다.
-const firebaseConfigRaw = typeof __firebase_config !== 'undefined' ? __firebase_config : (process.env.FIREBASE_CONFIG || '{}');
-const firebaseConfig = JSON.parse(firebaseConfigRaw);
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
-const auth = getAuth(firebaseApp);
+// --- Firebase 설정 및 초기화 (Render 배포 대응) ---
+let db, auth;
+const firebaseConfigRaw = typeof __firebase_config !== 'undefined' ? __firebase_config : (process.env.FIREBASE_CONFIG || null);
 const appId = typeof __app_id !== 'undefined' ? __app_id : (process.env.APP_ID || 'goblin-mine-rpg');
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : (process.env.INITIAL_AUTH_TOKEN || null);
 
-// Rule 3: Firebase 인증 우선 수행
-const initAuth = async () => {
+if (firebaseConfigRaw) {
     try {
-        if (initialAuthToken) {
-            await signInWithCustomToken(auth, initialAuthToken);
-        } else {
-            await signInAnonymously(auth);
-        }
+        const firebaseConfig = JSON.parse(firebaseConfigRaw);
+        const firebaseApp = initializeApp(firebaseConfig);
+        db = getFirestore(firebaseApp);
+        auth = getAuth(firebaseApp);
+
+        const initAuth = async () => {
+            const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : (process.env.INITIAL_AUTH_TOKEN || null);
+            if (token) await signInWithCustomToken(auth, token);
+            else await signInAnonymously(auth);
+        };
+        initAuth();
     } catch (e) {
-        console.error("Firebase Auth Error:", e);
+        console.error("Firebase 초기화 실패: 환경 변수 설정을 확인하세요.", e);
     }
-};
-initAuth();
+} else {
+    console.error("FIREBASE_CONFIG 환경 변수가 설정되지 않았습니다.");
+}
 
 // --- 게임 상수 ---
 const TORCH_DURATION = 60000; 
@@ -44,7 +45,7 @@ const MAX_BLEED_GAUGE = 100;
 const IDENTIFY_COST = 100;
 const MAP_SIZE = 3000; 
 
-// --- NPC & 던전 목록 ---
+// --- 마을 NPC 및 던전 데이터 ---
 const VILLAGE_NPCS = [
     { id: 'blacksmith', name: '대장장이 고든', x: -200, y: -200, role: '강화' },
     { id: 'merchant', name: '상인 잭', x: 200, y: -200, role: '상점/감별' },
@@ -53,10 +54,10 @@ const VILLAGE_NPCS = [
 ];
 
 const DUNGEON_LIST = [
-    { id: 'goblin_mine', name: '고블린 광산 (Goblin Mine)', level: 1, difficulty: 'Easy', desc: '무작위 구조의 어두운 광산입니다.' }
+    { id: 'goblin_mine', name: '고블린 광산 (Goblin Mine)', level: 1, difficulty: 'Easy', desc: '무작위로 생성되는 고블린의 거점입니다.' }
 ];
 
-// --- 아이템 데이터베이스 (30종 절대 누락 없음) ---
+// --- 아이템 데이터베이스 (30종 완벽 유지) ---
 const ITEM_DATABASE = {
     weapons: [
         { name: "무뎌진 곡괭이", job: "Guardian", tier: "Common", type: "weapon", stats: { atk: 5, stagger: 0.05 } },
@@ -78,7 +79,7 @@ const ITEM_DATABASE = {
         { name: "광산 안전모", part: "Head", tier: "Rare", type: "armor", stats: { def: 8, blastResist: 0.5 } },
         { name: "철광석 흉갑", part: "Body", tier: "Rare", type: "armor", stats: { def: 30, speed: -0.1 } },
         { name: "그림자 망토", part: "Back", tier: "Epic", type: "armor", stats: { aggroReduce: 0.5 } },
-        { name: "고대 광부의 작업복", part: "Body", tier: "Legendary", type: "armor", stats: { def: 25, bleedResist: 0.6 } }, 
+        { name: "고대 광부의 작업복", part: "Body", tier: "Legendary", type: "armor", stats: { def: 25, bleedResist: 0.6 } },
         { name: "용암 방열복", part: "Body", tier: "Epic", type: "armor", stats: { fireImmune: true } },
         { name: "견고한 무릎 보호대", part: "Legs", tier: "Magic", type: "armor", stats: { dashCD: -1.0 } },
         { name: "광부의 두꺼운 장갑", part: "Hands", tier: "Magic", type: "armor", stats: { interactSpeed: 1.4 } },
@@ -116,17 +117,17 @@ const MONSTER_TEMPLATES = {
     Mine_Breaker: { type: 'boss', name: "마인 브레이커", hp: 15000, atk: 80, speed: 1.8, range: 180, aggro: 1000, color: '#7f1d1d', size: 180, slamCD: 6000, rockCD: 12000 }
 };
 
-// --- 게임 상태 변수 ---
+// --- 게임 상태 관리 ---
 const players = {};
 const projectiles = [];
 const monsters = {};
 const groundItems = [];
-const worldObjects = [];
-const worldPortals = [];
-const rooms = {};
+const worldObjects = []; 
+const worldPortals = []; 
+const rooms = {}; 
 const activeTrades = {};
 
-// --- 스탯 계산 (시야, 횃불 등 모든 효과 통합) ---
+// --- 스탯 계산 시스템 ---
 function calculateDerivedStats(p) {
     const now = Date.now();
     const base = JOB_BASE[p.job];
@@ -153,6 +154,7 @@ function calculateDerivedStats(p) {
             if (item.stats.bleedResist) bleedReduction *= (1 - item.stats.bleedResist);
         }
     });
+
     if (p.torchUntil && now < p.torchUntil) sightMult *= 1.5;
 
     return {
@@ -173,61 +175,60 @@ function calculateDerivedStats(p) {
     };
 }
 
-// --- Persistence ---
-const getPlayerDoc = (nick) => doc(db, 'artifacts', appId, 'public', 'data', 'players', nick);
+// --- 데이터 영속성 (Firestore) ---
 async function savePlayerData(nick, p) {
-    if (!auth.currentUser) return;
+    if (!db || !auth.currentUser) return;
     try {
-        await setDoc(getPlayerDoc(nick), {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', nick), {
             nickname: p.nickname, job: p.job, level: p.level, gold: p.gold,
             addedStats: p.addedStats, statPoints: p.statPoints,
             inventory: p.inventory, storage: p.storage,
             equippedWeapon: p.equippedWeapon, equippedArmor: p.equippedArmor, equippedAcc: p.equippedAcc,
             lastUpdated: Date.now()
         });
-    } catch (e) { console.error("DB Save Fail", e); }
+    } catch (e) { console.error("Save Error", e); }
 }
+
 async function loadPlayerData(nick) {
-    if (!auth.currentUser) return null;
+    if (!db || !auth.currentUser) return null;
     try {
-        const s = await getDoc(getPlayerDoc(nick));
+        const s = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', nick));
         return s.exists() ? s.data() : null;
     } catch (e) { return null; }
 }
 
-// --- Procedural Generation (입장 시마다 랜덤화) ---
+// --- 절차적 던전 생성 ---
 function generateDungeonContent() {
-    Object.keys(monsters).forEach(k => delete monsters[k]);
+    Object.keys(monsters).forEach(key => delete monsters[key]);
     worldObjects.length = 0; worldPortals.length = 0; groundItems.length = 0;
-    const sX = 500, sY = 500;
+    const startX = 500, startY = 500;
     for(let i=0; i<30; i++) {
-        let rx, ry; do { rx = Math.random()*MAP_SIZE; ry = Math.random()*MAP_SIZE; } while(Math.hypot(rx-sX, ry-sY)<400);
-        worldObjects.push({ x: rx, y: ry, type: 'rock', size: 60+Math.random()*40 });
+        let rx, ry; do { rx = Math.random() * MAP_SIZE; ry = Math.random() * MAP_SIZE; } while (Math.hypot(rx - startX, ry - startY) < 400);
+        worldObjects.push({ x: rx, y: ry, type: 'rock', size: 60 + Math.random()*40 });
     }
     for(let i=0; i<2; i++) {
-        let px, py; do { px = 500+Math.random()*(MAP_SIZE-1000); py = 500+Math.random()*(MAP_SIZE-1000); } while(Math.hypot(px-sX, py-sY)<1800);
-        worldPortals.push({ id: `p_${i}`, x: px, y: py });
+        let px, py; do { px = 500 + Math.random() * (MAP_SIZE - 1000); py = 500 + Math.random() * (MAP_SIZE - 1000); } while (Math.hypot(px - startX, py - startY) < 1800);
+        worldPortals.push({ id: `portal_${i}`, x: px, y: py });
     }
     for (let i = 0; i < 40; i++) {
-        const t = Object.keys(MONSTER_TEMPLATES).filter(k => MONSTER_TEMPLATES[k].type === 'common');
-        const k = t[Math.floor(Math.random()*t.length)];
-        let mx, my; do { mx = Math.random()*MAP_SIZE; my = Math.random()*MAP_SIZE; } while(Math.hypot(mx-sX, my-sY)<500);
-        createMonster(k, `c_${i}`, mx, my);
+        const types = Object.keys(MONSTER_TEMPLATES).filter(k => MONSTER_TEMPLATES[k].type === 'common');
+        let mx, my; do { mx = Math.random() * MAP_SIZE; my = Math.random() * MAP_SIZE; } while (Math.hypot(mx - startX, my - startY) < 500);
+        createMonster(types[Math.floor(Math.random() * types.length)], `c_${i}`, mx, my);
     }
     for (let i = 0; i < 2; i++) {
-        let ex, ey; do { ex = Math.random()*MAP_SIZE; ey = Math.random()*MAP_SIZE; } while(Math.hypot(ex-sX, ey-sY)<1000);
+        let ex, ey; do { ex = Math.random() * MAP_SIZE; ey = Math.random() * MAP_SIZE; } while (Math.hypot(ex - startX, ey - startY) < 1000);
         createMonster('Goblin_Overseer', `elite_${i}`, ex, ey);
     }
-    let bx, by; do { bx = 500+Math.random()*(MAP_SIZE-1000); by = 500+Math.random()*(MAP_SIZE-1000); } while(Math.hypot(bx-sX, by-sY)<1500);
+    let bx, by; do { bx = 500 + Math.random() * (MAP_SIZE - 1000); by = 500 + Math.random() * (MAP_SIZE - 1000); } while (Math.hypot(bx - startX, by - startY) < 1500);
     createMonster('Mine_Breaker', 'boss_1', bx, by);
 }
+
 function createMonster(key, id, fx, fy) {
     const t = MONSTER_TEMPLATES[key];
     monsters[id] = { id, key, ...t, maxHp: t.hp, x: fx, y: fy, lastAtk: 0, lastPattern: 0 };
 }
-generateDungeonContent(); // 초기 생성
 
-// --- Game Loop (실시간 데미지 적용) ---
+// --- 메인 게임 루프 ---
 setInterval(() => {
     const now = Date.now();
     for (let i = projectiles.length - 1; i >= 0; i--) {
@@ -237,11 +238,10 @@ setInterval(() => {
             Object.values(monsters).forEach(m => {
                 if (m.hp <= 0) return;
                 if (Math.hypot(pj.x-m.x, pj.y-m.y) < m.size/2 + 20) {
-                    let d = pj.damage; if (Math.random() < pj.critChance) d *= pj.critDmg;
-                    if (m.type !== 'common') d *= (pj.vsElite || 1.0);
-                    m.hp -= d; // 즉시 반영
-                    const a = Math.atan2(m.y-pj.y, m.x-pj.x);
-                    m.x += Math.cos(a)*25*pj.kbMult; m.y += Math.sin(a)*25*pj.kbMult;
+                    let dmg = pj.damage; if (Math.random() < pj.critChance) dmg *= pj.critDmg;
+                    if (m.type !== 'common') dmg *= (pj.vsElite || 1.0);
+                    m.hp -= dmg; const ang = Math.atan2(m.y-pj.y, m.x-pj.x);
+                    m.x += Math.cos(ang) * (25 * pj.kbMult); m.y += Math.sin(ang) * (25 * pj.kbMult);
                     pj.life = 0; if (m.hp <= 0) handleMonsterDeath(m, pj.owner);
                 }
             });
@@ -280,12 +280,8 @@ setInterval(() => {
             }
             if (minDist < m.range) {
                 if (now - m.lastAtk > 1500) {
-                    if (m.isRanged) {
-                        projectiles.push({ fromPlayer: false, owner: m.id, x: m.x, y: m.y, vx: Math.cos(Math.atan2(target.y-m.y, target.x-m.x))*10, vy: Math.sin(Math.atan2(target.y-m.y, target.x-m.x))*10, life: 1000, damage: m.atk });
-                    } else {
-                        target.hp -= Math.max(1, m.atk - stats.damageReduc);
-                        if (stats.reflect > 0) m.hp -= m.atk * stats.reflect;
-                    }
+                    target.hp -= Math.max(1, m.atk - stats.damageReduc);
+                    if (stats.reflect > 0) m.hp -= m.atk * stats.reflect;
                     m.lastAtk = now;
                 }
             } else {
@@ -311,50 +307,49 @@ setInterval(() => {
     io.emit('stateUpdate', { players, projectiles, monsters: Object.values(monsters).filter(m => m.hp > 0), groundItems, worldPortals, worldObjects, npcs: VILLAGE_NPCS });
 }, 16);
 
-function triggerDowned(p) { p.downed = true; p.hp = 0; p.bleedGauge = MAX_BLEED_GAUGE; io.to(p.id).emit('sysMsg', "기절함! 도움 필요."); }
+function triggerDowned(p) { p.downed = true; p.hp = 0; p.bleedGauge = MAX_BLEED_GAUGE; io.to(p.id).emit('sysMsg', "기절했습니다!"); }
 function handleFinalDeath(p) {
-    const dX = p.x, dY = p.y;
-    const drps = p.inventory.filter(i => i.type !== "consumable");
-    drps.forEach(i => groundItems.push({ id: Math.random().toString(36).substr(2,9), x: dX+Math.random()*40-20, y: dY+Math.random()*40-20, data: { ...i } }));
+    p.inventory.filter(i => i.type !== "consumable").forEach(i => groundItems.push({ id: Math.random().toString(36).substr(2,9), x: p.x+Math.random()*40-20, y: p.y+Math.random()*40-20, data: { ...i } }));
     p.inventory = p.inventory.filter(i => i.type === "consumable");
-    p.hp = 0; p.downed = false; p.isDead = true; io.to(p.id).emit('sysMsg', "최종 사망 (관전 모드)");
+    p.hp = 0; p.downed = false; p.isDead = true; io.to(p.id).emit('sysMsg', "사망 (관전 모드)");
 }
+
 function handleMonsterDeath(m, killerId) {
     const k = players[killerId]; if (!k) return;
     k.gold += (m.type === 'boss' ? 1000 : (m.type === 'elite' ? 200 : Math.floor(Math.random()*10)+1));
     if (Math.random() < (m.type === 'boss' ? 1.0 : (m.type === 'elite' ? 0.6 : 0.15))) {
-        const c = ['weapons', 'armor', 'accessories'][Math.floor(Math.random()*3)];
-        let t = 'Common', tr = Math.random();
-        if (m.type === 'boss') t = tr < 0.1 ? 'Legendary' : 'Epic';
-        else if (m.type === 'elite') t = tr < 0.05 ? 'Epic' : (tr < 0.4 ? 'Rare' : 'Magic');
-        else t = tr < 0.01 ? 'Rare' : (tr < 0.1 ? 'Magic' : 'Common');
-        const it = ITEM_DATABASE[c].find(i => i.tier === t);
-        if (it) groundItems.push({ id: Math.random().toString(36).substr(2,9), x: m.x, y: m.y, data: { ...it, id: Math.random().toString(36).substr(2,5), isIdentified: false } });
+        const cat = ['weapons', 'armor', 'accessories'][Math.floor(Math.random()*3)];
+        let tier = 'Common', tr = Math.random();
+        if (m.type === 'boss') tier = tr < 0.1 ? 'Legendary' : 'Epic';
+        else if (m.type === 'elite') tier = tr < 0.05 ? 'Epic' : (tr < 0.4 ? 'Rare' : 'Magic');
+        else tier = tr < 0.01 ? 'Rare' : (tr < 0.1 ? 'Magic' : 'Common');
+        const item = ITEM_DATABASE[cat].find(i => i.tier === tier);
+        if (item) groundItems.push({ id: Math.random().toString(36).substr(2,9), x: m.x, y: m.y, data: { ...item, id: Math.random().toString(36).substr(2,5), isIdentified: false } });
     }
     if (m.type === 'boss') {
-        io.to(k.roomPwd).emit('sysMsg', "보스 클리어! 10초 후 자동 귀환.");
+        io.to(k.roomPwd).emit('sysMsg', "보스 처치! 10초 후 자동 귀환.");
         setTimeout(() => { rooms[k.roomPwd]?.members.forEach(id => { if (players[id]) returnToVillage(players[id]); }); }, 10000);
     }
 }
-function handleTeamEscape(l) { rooms[l.roomPwd]?.members.forEach(id => { if (players[id]) returnToVillage(players[id]); }); }
+function handleTeamEscape(leader) { rooms[leader.roomPwd]?.members.forEach(id => { if (players[id]) returnToVillage(players[id]); }); }
 function returnToVillage(p) { p.isDead = false; p.downed = false; p.inDungeon = false; p.hp = 1; p.x = 0; p.y = 0; p.portalEndTime = null; const s = io.sockets.sockets.get(p.id); if (s) s.emit('mapChange', { map: 'village' }); }
 function completeRevive(p) { const t = players[p.reviveTargetId]; if (t?.downed) { t.downed = false; t.hp = calculateDerivedStats(t).maxHp * 0.3; } p.reviveEndTime = null; p.reviveTargetId = null; }
 
 io.on('connection', (socket) => {
-    socket.on('checkNickname', async (n) => { const d = await loadPlayerData(n); socket.emit('nicknameStatus', d ? { exists: true, job: d.job, level: d.level } : { exists: false }); });
+    socket.on('checkNickname', async (nick) => { const d = await loadPlayerData(nick); socket.emit('nicknameStatus', d ? { exists: true, job: d.job, level: d.level } : { exists: false }); });
     socket.on('join', async (data) => {
-        let pD = await loadPlayerData(data.nickname) || { nickname: data.nickname, job: data.job, level: 1, gold: 5000, statPoints: 0, addedStats: { sta: 0, str: 0, int: 0, def: 0, dex: 0 }, inventory: [], storage: [], equippedWeapon: null, equippedArmor: null, equippedAcc: null };
-        const d = calculateDerivedStats(pD);
-        players[socket.id] = { ...pD, id: socket.id, x: 0, y: 0, hp: d.maxHp, mp: d.maxMp, inDungeon: false, torchUntil: 0, roomPwd: null };
+        let pData = await loadPlayerData(data.nickname) || { nickname: data.nickname, job: data.job, level: 1, gold: 5000, statPoints: 0, addedStats: { sta: 0, str: 0, int: 0, def: 0, dex: 0 }, inventory: [], storage: [], equippedWeapon: null, equippedArmor: null, equippedAcc: null };
+        const d = calculateDerivedStats(pData);
+        players[socket.id] = { ...pData, id: socket.id, x: 0, y: 0, hp: d.maxHp, mp: d.maxMp, inDungeon: false, torchUntil: 0, roomPwd: null };
         socket.emit('joined', players[socket.id]);
     });
-    socket.on('move', (d) => { const p = players[socket.id]; if (p && !p.downed && !p.isDead) { p.x = d.x; p.y = d.y; p.dir = d.dir; p.reviveEndTime = null; p.portalEndTime = null; } });
-    socket.on('action', (d) => {
+    socket.on('move', (data) => { const p = players[socket.id]; if (p && !p.downed && !p.isDead) { p.x = data.x; p.y = data.y; p.dir = data.dir; p.reviveEndTime = null; p.portalEndTime = null; } });
+    socket.on('action', (data) => {
         const p = players[socket.id]; if (!p || p.downed || p.isDead) return;
-        if (d.type === 'attack') {
-            const st = calculateDerivedStats(p);
-            projectiles.push({ fromPlayer: true, owner: p.id, x: p.x, y: p.y, vx: Math.cos(d.angle)*15, vy: Math.sin(d.angle)*15, life: 1000, damage: st.physAtk, critChance: st.critChance, critDmg: st.critDmg, kbMult: st.knockbackMult, aoe: p.equippedWeapon?.stats?.aoe || 0, vsElite: p.equippedWeapon?.stats?.vsElite || 1.0 });
-        } else if (d.type === 'skill') handleSkill(socket, p, d.skillIdx, d.angle);
+        if (data.type === 'attack') {
+            const d = calculateDerivedStats(p);
+            projectiles.push({ fromPlayer: true, owner: p.id, x: p.x, y: p.y, vx: Math.cos(data.angle)*15, vy: Math.sin(data.angle)*15, life: 1000, damage: d.physAtk, critChance: d.critChance, critDmg: d.critDmg, kbMult: d.knockbackMult, aoe: p.equippedWeapon?.stats?.aoe || 0, vsElite: p.equippedWeapon?.stats?.vsElite || 1.0 });
+        } else if (data.type === 'skill') handleSkill(socket, p, data.skillIdx, data.angle);
     });
     socket.on('joinRoom', (pwd) => { if (!rooms[pwd]) rooms[pwd] = { leader: socket.id, members: [] }; rooms[pwd].members.push(socket.id); players[socket.id].roomPwd = pwd; socket.join(pwd); });
     socket.on('selectDungeon', (did) => {
@@ -366,19 +361,19 @@ io.on('connection', (socket) => {
     socket.on('pickupItem', (id) => {
         const p = players[socket.id]; const idx = groundItems.findIndex(i => i.id === id);
         if (idx !== -1 && Math.hypot(p.x-groundItems[idx].x, p.y-groundItems[idx].y) < 120) {
-            p.inventory.push(groundItems[idx].data); groundItems.splice(idx, 1); // 먼저 먹는 사람이 임자
+            p.inventory.push(groundItems[idx].data); groundItems.splice(idx, 1);
         }
     });
     socket.on('identifyItem', (uid) => {
-        const p = players[socket.id]; const iX = p?.inventory.findIndex(i => i.id === uid);
-        if (iX !== -1 && !p.inventory[iX].isIdentified && p.gold >= IDENTIFY_COST) { p.gold -= IDENTIFY_COST; p.inventory[iX].isIdentified = true; }
+        const p = players[socket.id]; const idx = p?.inventory.findIndex(i => i.id === uid);
+        if (idx !== -1 && !p.inventory[idx].isIdentified && p.gold >= IDENTIFY_COST) { p.gold -= IDENTIFY_COST; p.inventory[idx].isIdentified = true; }
     });
     socket.on('usePortal', () => { if (players[socket.id]) players[socket.id].portalEndTime = Date.now() + PORTAL_CAST_TIME; });
     socket.on('tryRevive', (tid) => { if (players[socket.id]) { players[socket.id].reviveTargetId = tid; players[socket.id].reviveEndTime = Date.now() + REVIVE_TIME; } });
     socket.on('disconnect', async () => {
         const p = players[socket.id];
         if (p) {
-            if (p.inDungeon) { p.inventory = p.inventory.filter(i => i.type === "consumable"); p.inDungeon = false; if (p.roomPwd) io.to(p.roomPwd).emit('sysMsg', `${p.nickname} 탈출 실패로 장비 분실.`); }
+            if (p.inDungeon) { p.inventory = p.inventory.filter(i => i.type === "consumable"); p.inDungeon = false; if (p.roomPwd) io.to(p.roomPwd).emit('sysMsg', `${p.nickname} 탈출 실패로 장비 유실.`); }
             if (p.roomPwd && rooms[p.roomPwd]) {
                 rooms[p.roomPwd].members = rooms[p.roomPwd].members.filter(id => id !== socket.id);
                 if (rooms[p.roomPwd].members.length === 0) delete rooms[p.roomPwd];
@@ -391,7 +386,7 @@ io.on('connection', (socket) => {
 
 function handleSkill(socket, p, idx, angle) {
     const d = calculateDerivedStats(p);
-    const s = {
+    const skills = {
         Guardian: [
             { cost: 15, logic: () => { p.x += Math.cos(angle)*200; p.y += Math.sin(angle)*200; } },
             { cost: 30, logic: () => { p.hp = Math.min(d.maxHp, p.hp + 50); } },
@@ -407,8 +402,9 @@ function handleSkill(socket, p, idx, angle) {
             { cost: 40, logic: () => {}, },
             { cost: 50, logic: () => { io.to(p.roomPwd).emit('skillEffect', { type: 'explode', x: p.x, y: p.y }); } }
         ]
-    }[p.job][idx];
+    };
+    const s = skills[p.job][idx];
     if (p.mp >= s.cost) { p.mp -= s.cost; s.logic(); }
 }
 
-server.listen(process.env.PORT || 3000, () => console.log("Integrated Multiplayer Server Running"));
+server.listen(process.env.PORT || 3000, () => console.log("Integrated Server Ready"));
